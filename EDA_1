@@ -1,0 +1,46 @@
+library(KoNLP)
+library(ggplot2)
+library(wordcloud)
+KoNLP::useNIADic()
+
+setwd("C:/data/kice")
+open1 <- readLines("open1.txt")
+open2 <- readLines("open2.txt")
+interv1 <- readLines("interview1.txt")
+interviewer <- grep("면담자", interv1)
+interv1 <- interv1[-interviewer]
+interv2 <- readLines("interview2.txt")
+interviewer <- grep("면담자", interv2)
+interv2 <- interv1[-interviewer]
+
+rawtex <- c(open1, open2, interv1, interv2)
+rawtex <- gsub("것", "", rawtex)
+rawtex <- gsub("저희", "", rawtex)
+rawtex <- gsub("모둠", "", rawtex)
+rawtex <- gsub("한", "", rawtex)
+rawtex <- gsub("하", "", rawtex)
+rawtex <- gsub("\\d+","",rawtex)
+rawtex <- gsub("\\.","",rawtex)
+rawtex <- gsub("학생","",rawtex)
+rawtex <- gsub("웃음","",rawtex)
+rawtex <- gsub("-","",rawtex)
+
+
+txt1 <- KoNLP::extractNoun(rawtex)
+wordbag <- unlist(txt1)
+wordbag <- wordbag[-grep("^것$", wordbag)]
+wordbag <- wordbag[-grep("^애$", wordbag)]
+wordbag <- wordbag[-grep("^다음$", wordbag)]
+wordbag <- wordbag[-grep("^수업$", wordbag)]
+wordbag <- wordbag[-grep("^거$", wordbag)]
+wordbag <- wordbag[-grep("^은$", wordbag)]
+wordbag <- wordbag[-grep("^테$", wordbag)]
+wordbag <- wordbag[-grep("^만$", wordbag)]
+wordbag <- wordbag[-grep("^기$", wordbag)]
+wordbag <- wordbag[-grep("^되었$", wordbag)]
+
+wordcount <- table(wordbag)
+
+pal <- brewer.pal(12, "Set3")
+wordcloud(names(wordcount), freq=wordcount, scale=c(5, 0.5),
+          random.order = F, rot.per=.2, colors=pal)
