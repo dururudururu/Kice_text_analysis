@@ -28,19 +28,16 @@ rawtex <- gsub("-","",rawtex)
 
 txt1 <- KoNLP::extractNoun(rawtex)
 wordbag <- unlist(txt1)
-wordbag <- wordbag[-grep("^것$", wordbag)]
-wordbag <- wordbag[-grep("^애$", wordbag)]
+wordbag <- Filter(function(x){nchar(x)>=2}, wordbag)
 wordbag <- wordbag[-grep("^다음$", wordbag)]
 wordbag <- wordbag[-grep("^수업$", wordbag)]
-wordbag <- wordbag[-grep("^거$", wordbag)]
-wordbag <- wordbag[-grep("^은$", wordbag)]
-wordbag <- wordbag[-grep("^테$", wordbag)]
-wordbag <- wordbag[-grep("^만$", wordbag)]
-wordbag <- wordbag[-grep("^기$", wordbag)]
 wordbag <- wordbag[-grep("^되었$", wordbag)]
+wordbag <- wordbag[-grep("^조사$", wordbag)]
+wordbag <- wordbag[-grep("^최유진$", wordbag)]
 
 wordcount <- table(wordbag)
 
 pal <- brewer.pal(12, "Set3")
-wordcloud(names(wordcount), freq=wordcount, scale=c(5, 0.5),
-          random.order = F, rot.per=.2, colors=pal)
+wordcloud(names(wordcount), freq=wordcount, scale=c(6,0.5),
+          random.order = F, rot.per=.1, colors=pal)
+
