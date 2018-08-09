@@ -1,0 +1,50 @@
+library(rJava)
+library(KoNLP)
+library(tm)
+library(ggplot2)
+library(wordcloud)
+library(wordcloud2)
+library(stringr)
+KoNLP::useNIADic()
+
+setwd("D:/Kice_text_analysis-master")
+open1 <- readLines("open1.txt")
+open2 <- readLines("open2.txt")
+interv1 <- readLines("interview1.txt")
+interviewer <- grep("면담자", interv1)
+interv1 <- interv1[-interviewer]
+interv2 <- readLines("interview2.txt")
+interviewer <- grep("면담자", interv2)
+interv2 <- interv1[-interviewer]
+
+rawtex <- interv1
+rawtex <- gsub("것", "", rawtex)
+rawtex <- gsub("저희", "", rawtex)
+rawtex <- gsub("모둠", "", rawtex)
+rawtex <- gsub("한", "", rawtex)
+rawtex <- gsub("하", "", rawtex)
+rawtex <- gsub("\\d+","",rawtex)
+rawtex <- gsub("\\.","",rawtex)
+rawtex <- gsub("학생","",rawtex)
+rawtex <- gsub("웃음","",rawtex)
+rawtex <- gsub("-","",rawtex)
+rawtex <- gsub("\\:","",rawtex)
+
+
+txt1 <- KoNLP::extractNoun(rawtex)
+txt1 <- KoNLP::SimplePos22(rawtex)
+txt1 <- stringr::str_match(txt1, '([가-힣]+)/[')
+## 22품사분류에서 잡아내는 것 짜는 중이었음.
+
+wordbag <- unlist(txt1)
+wordbag <- Filter(function(x){nchar(x)>=2}, wordbag)
+
+wordcount <- table(wordbag)
+wordcount <- wordcount[wordcount>1]
+
+pal <- brewer.pal(10, "Spectral")
+wordcloud(names(wordcount), freq=wordcount, scale=c(3, 0.5),
+          random.order = F, rot.per=.3, colors=pal)
+wordcloud2(wordcount, color='random-dark',
+           ellipticity = .5, rotateRatio = 1,
+           minRotation = -pi/4, maxRotation = -pi/4)
