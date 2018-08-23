@@ -1,0 +1,132 @@
+################## Library Settings ############
+library(rJava)
+library(KoNLP)
+library(tm)
+library(ggplot2)
+library(wordcloud)
+library(wordcloud2)
+library(stringr)
+library(lsa)
+library(cluster)
+library(GPArotation)
+library(extrafont)
+KoNLP::useNIADic()
+extrafont::loadfonts(device="win")
+windowsFonts(HG=windowsFont("SeoulHangang M"))
+################################################
+
+
+## 0.File load to 'list' ##
+setwd("C:/data/Kice_text")
+file_list <- list.files("C:/data/Kice_text", pattern="*.txt")
+text_list <- lapply(file_list, readLines)
+
+
+## 1.개별 파일의 전처리 ##
+# 1.1.면담자 질문, 구두점, 특수문자, 학교이름 등 제거하기
+
+#함수로 만들어서 lapply 사용한다.
+clean.1 <- function(x) {
+  #면담자 질문 제거(있을 경우만 - 없는데 그냥 쓰면 빈 벡터가 된다.).
+  #어떤 학교의 경우는 면담자 질문이 정보량이 많음. 이 경우에도 살릴까.
+  #interviewer <- grep("면담자", x)
+  #if (length(interviewer) >0) {x <- x[-interviewer]}
+  
+  x <- gsub("면담자", "", x)  
+  x <- gsub("것", "", x)
+  x <- gsub("저희", "", x)
+  x <- gsub("모둠", "", x)
+  x <- gsub("한", "", x)
+  x <- gsub("하", "", x)
+  x <- gsub("학생","",x)
+  x <- gsub("웃음","",x)
+  x <- gsub("그거","",x)
+  x <- gsub("그것","",x)
+  x <- gsub("혜원","",x)  
+  x <- gsub("[[:punct:]]","",x)
+}
+
+text_list <- lapply(text_list, clean.1) #clean.1 함수의 적용.
+
+
+# 1.2.SimplePos9으로 체언, 용언, 수식언, 외국어 추출
+## 9품사 or 22품사분류에서 잡아내는 것 짜는 중이었음.
+text_word <- sapply(text_list, KoNLP::SimplePos09)
+txt1 <- sapply(text_word, function(x) stringr::str_match(x ,'([가-힣]+)/[FNPM]'))
+txt1 <- lapply(txt1, "[", , 2)
+text_word <- sapply(txt1, na.omit)
+
+## 단어사전에 추가해야되고 잘라야 되는 단어가 많음.
+
+# 1.3.단어 벡터 보면서 클리닝, 딕셔너리 추가, 단어 형태 통일 
+
+
+# 2.corpus 및 tdm 만들기
+corpus <- Corpus(VectorSource(text_word))
+
+uniTokenizer <- function(x) unlist(strsplit(as.character(x), "[[:space:]]+"))
+control = list(tokenize = uniTokenizer,
+               removeNumbers = T, wordLengths=c(2,20),
+               removePunctuation = T, stopwords = c("\\n", "\n", "것", "그", "그리고", "그런데", "그래서",
+                                                    "이", "아주", "저", "노", "이주",
+                                                    "그렇", "그러", "다음", "정말", "그러면", "굉장히",
+                                                    "형곡중학", "매탄초", "서래초",
+                                                    "강진현", "안희주", "김진석", "장윤서", "유승훈", "김연주", "김수현", "권두윤", "김도현", "박건우", "강진"),
+               weighting = function (x) weightTfIdf(x, T))
+tdm <- DocumentTermMatrix(corpus, control=control)
+td <- removeSparseTerms(tdm, .99)
+length(td$dimnames$Terms)
+
+check <- which(rowSums(as.matrix(td))>1)
+td <- td[check,]
+colTotal <- apply(td, 1 ,sum)
+which(colTotal <= 0)
+
+
+# 3. 빈도분석 및 워드클라우드
+TermFreq <- colSums(as.matrix(tdm))
+summ1 <- grep("재미", names(TermFreq))
+summ2 <- grep("재밌", names(TermFreq))
+sumcol1 <- sum(TermFreq[c(summ1, summ2)])
+TermFreq <- TermFreq[-c(summ1, summ2)]
+#TermFreq["재미"]<-sumcol1
+
+Freqdf <- data.frame(term=names(TermFreq), freq=TermFreq)
+Freqdf <- Freqdf[-which(nchar(as.character(Freqdf$term))==1),]
+order.freq <- order(Freqdf$freq, decreasing = T)
+
+Freqdf <- Freqdf[order(Freqdf$freq, decreasing = T),][1:30,]
+
+png("freqplot_all2.png",  width=3000, height=3000, res=350)
+ggplot(Freqdf, aes(x=freq, y=reorder(term, freq))) +
+  geom_point(size=3) +
+  theme_bw() +
+  labs(x="상대적 빈도", y="단어목록") +
+  theme(panel.grid.major.x = element_blank(),
+        panel.grid.minor.x = element_blank(),
+        panel.grid.major.y = element_line(colour="grey60", linetype="dashed"),
+        axis.title.x = element_text(family='HG'),
+        axis.title.y = element_text(family='HG'))
+dev.off()
+
+names(TermFreq) #890개 정도. 이걸 보면서 다시 필터링 필요함.
+write.csv(TermFreq,"TFmat.csv")
+
+## 워드클라우드
+## if txt[,1] /= P, M & if length(txt[,2]) < 2, then remove.
+wordcount <- TermFreq[-which(nchar(as.character(names(TermFreq)))==1)]
+
+
+pal <- brewer.pal(9, "Set1")
+
+png("wordcloud_all.png", width=3000, height=3000, res=350)
+wordcloud(names(wordcount), freq=wordcount*10000, scale=c(5, 0.5), max.words=200,
+          random.order = F, rot.per=.15, colors=pal, family="HG")
+dev.off()
+
+
+# 4. 잠재의미분석
+LSA <- lsa(td, dim=4)
+st <- LSA$tk; wd <- LSA$dk; strength <- LSA$sk
+st
+var(st)
