@@ -8,17 +8,18 @@ library(wordcloud2)
 library(stringr)
 library(lsa)
 library(cluster)
-library(GPArotation)
 library(extrafont)
 KoNLP::useNIADic()
-extrafont::loadfonts(device="win")
-windowsFonts(HG=windowsFont("SeoulHangang M"))
+
+
+#extrafont::loadfonts(device="win")
+#windowsFonts(HG=windowsFont("SeoulHangang M"))
 ################################################
 
 
 ## 0.File load to 'list' ##
-setwd("C:/data/Kice_text")
-file_list <- list.files("C:/data/Kice_text", pattern="*.txt")
+setwd("D:/kice/student")
+file_list <- list.files("D:/kice/student", pattern="*.txt")
 text_list <- lapply(file_list, readLines)
 
 
@@ -29,104 +30,102 @@ text_list <- lapply(file_list, readLines)
 clean.1 <- function(x) {
   #면담자 질문 제거(있을 경우만 - 없는데 그냥 쓰면 빈 벡터가 된다.).
   #어떤 학교의 경우는 면담자 질문이 정보량이 많음. 이 경우에도 살릴까.
-  #interviewer <- grep("면담자", x)
-  #if (length(interviewer) >0) {x <- x[-interviewer]}
+  interviewer <- grep("면담자", x)
+  if (length(interviewer) >0) {x <- x[-interviewer]}
+  interviewer <- grep("연구자", x)
+  if (length(interviewer) >0) {x <- x[-interviewer]}
   
   x <- gsub("면담자", "", x)  
-  x <- gsub("것", "", x)
   x <- gsub("저희", "", x)
   x <- gsub("모둠", "", x)
-  x <- gsub("한", "", x)
-  x <- gsub("하", "", x)
   x <- gsub("학생","",x)
   x <- gsub("웃음","",x)
   x <- gsub("그거","",x)
   x <- gsub("그것","",x)
-  x <- gsub("혜원","",x)  
   x <- gsub("[[:punct:]]","",x)
+  x <- gsub("[[:digit:]]","",x)
+}
+
+clean.2 <- function(x) {
+  none <- which(str_length((x))< 5)  #여기 들어가는 숫자보다 길이가 짧은문장 날립니다.
+  x <- x[-none]
 }
 
 text_list <- lapply(text_list, clean.1) #clean.1 함수의 적용.
+text_list <- lapply(text_list, clean.2)
 
 
-# 1.2.SimplePos9으로 체언, 용언, 수식언, 외국어 추출
-## 9품사 or 22품사분류에서 잡아내는 것 짜는 중이었음.
-text_word <- sapply(text_list, KoNLP::SimplePos09)
-txt1 <- sapply(text_word, function(x) stringr::str_match(x ,'([가-힣]+)/[FNPM]'))
-txt1 <- lapply(txt1, "[", , 2)
-text_word <- sapply(txt1, na.omit)
+# 1.2.SimplePos22으로 의미를 가지는 단어들 추출
+# "+"를 기준으로 분리시키기 -> 형태소 단위로 쪼갠다.
+#stringr로 /PV, /pA, /PX<-보조용언이라 안써도 될듯?, /MM, /MA 이게 들어가는 것만 뽑는다. -> 용언, 수식언
+text_word <- sapply(text_list, KoNLP::SimplePos22)
+dat <- unlist(text_word)
+names(dat) <- NULL
+dat <- lapply(dat, function(x) strsplit(x, split="[:+]"))
+dat <- unlist(dat)
+dat <- strsplit(dat, " ")
+dat <- unlist(dat)
 
-## 단어사전에 추가해야되고 잘라야 되는 단어가 많음.
+word.PV <- grep("PV", dat, value=T)
+word.PA <- grep("PA", dat, value=T)
+word.PX <- grep("PX", dat, value=T)
+word.MM <- grep("MM", dat, value=T)
+word.MA <- grep("MA", dat, value=T)
+word.NC <- grep("NC", dat, value=T)
 
-# 1.3.단어 벡터 보면서 클리닝, 딕셔너리 추가, 단어 형태 통일 
-
-
-# 2.corpus 및 tdm 만들기
-corpus <- Corpus(VectorSource(text_word))
-
-uniTokenizer <- function(x) unlist(strsplit(as.character(x), "[[:space:]]+"))
-control = list(tokenize = uniTokenizer,
-               removeNumbers = T, wordLengths=c(2,20),
-               removePunctuation = T, stopwords = c("\\n", "\n", "것", "그", "그리고", "그런데", "그래서",
-                                                    "이", "아주", "저", "노", "이주",
-                                                    "그렇", "그러", "다음", "정말", "그러면", "굉장히",
-                                                    "형곡중학", "매탄초", "서래초",
-                                                    "강진현", "안희주", "김진석", "장윤서", "유승훈", "김연주", "김수현", "권두윤", "김도현", "박건우", "강진"),
-               weighting = function (x) weightTfIdf(x, T))
-tdm <- DocumentTermMatrix(corpus, control=control)
-td <- removeSparseTerms(tdm, .99)
-length(td$dimnames$Terms)
-
-check <- which(rowSums(as.matrix(td))>1)
-td <- td[check,]
-colTotal <- apply(td, 1 ,sum)
-which(colTotal <= 0)
+# 용언들의 형태 "-다."로 통일하기.
+word.PV <- paste0(gsub("/PV", "", word.PV), "다")
+word.PV <- gsub("다다", "다", word.PV)
+word.PA <- paste0(gsub("/PA", "", word.PA), "다")
+word.PA <- gsub("다다", "다", word.PA)
+word.PX <- paste0(gsub("/PX", "", word.PX), "다")
+word.PX <- gsub("다다", "다", word.PX)
+word.MM <- gsub("/MM", "", word.MM)
+word.MA <- gsub("/MA", "", word.MA)
+word.NC <- gsub("/NC", "", word.NC)
+word.NC <- word.NC[-which(nchar(word.NC)<2)]
 
 
-# 3. 빈도분석 및 워드클라우드
-TermFreq <- colSums(as.matrix(tdm))
-summ1 <- grep("재미", names(TermFreq))
-summ2 <- grep("재밌", names(TermFreq))
-sumcol1 <- sum(TermFreq[c(summ1, summ2)])
-TermFreq <- TermFreq[-c(summ1, summ2)]
-#TermFreq["재미"]<-sumcol1
+# 2. 빈도분석(테이블, 플랏, 워드클라우드)
+# 2.1. 빈도테이블 만들기
+# 2.1.1.용언만 처리하기   #좋다. 의미있는 단어들 있음.
+fulltext <- c(word.PV, word.PA)
+wordcount <- table(fulltext)
+meanless <- c(which(names(wordcount)=="되다"), which(names(wordcount)=="그러다"), which(names(wordcount)=="대하다"),
+              which(names(wordcount)=="들다"), which(names(wordcount)=="하다"), which(names(wordcount)=="같다"),
+              which(names(wordcount)=="좀"), which(names(wordcount)=="많다"), which(names(wordcount)=="그렇다"),
+              which(names(wordcount)=="이렇다"), which(names(wordcount)=="좋다"), which(names(wordcount)==""))
+wordcount <- wordcount[-meanless]
 
-Freqdf <- data.frame(term=names(TermFreq), freq=TermFreq)
-Freqdf <- Freqdf[-which(nchar(as.character(Freqdf$term))==1),]
-order.freq <- order(Freqdf$freq, decreasing = T)
+plot(x=1:length(wordcount), y=as.vector(wordcount)) #대략적 빈도의 분포
+pal <- brewer.pal(5, "Dark2")
 
-Freqdf <- Freqdf[order(Freqdf$freq, decreasing = T),][1:30,]
+wordcloud(names(wordcount), freq=wordcount, scale=c(1, 0.5),
+          random.order = F, rot.per=.15, colors=pal)
 
-png("freqplot_all2.png",  width=3000, height=3000, res=350)
-ggplot(Freqdf, aes(x=freq, y=reorder(term, freq))) +
-  geom_point(size=3) +
-  theme_bw() +
-  labs(x="상대적 빈도", y="단어목록") +
-  theme(panel.grid.major.x = element_blank(),
-        panel.grid.minor.x = element_blank(),
-        panel.grid.major.y = element_line(colour="grey60", linetype="dashed"),
-        axis.title.x = element_text(family='HG'),
-        axis.title.y = element_text(family='HG'))
-dev.off()
-
-names(TermFreq) #890개 정도. 이걸 보면서 다시 필터링 필요함.
-write.csv(TermFreq,"TFmat.csv")
-
-## 워드클라우드
-## if txt[,1] /= P, M & if length(txt[,2]) < 2, then remove.
-wordcount <- TermFreq[-which(nchar(as.character(names(TermFreq)))==1)]
+# 2.1.2.수식언만 처리하기 #별 의미가 없음
+fulltext2 <- c(word.MA, word.MM)
+wordcount2 <- table(fulltext2)
 
 
-pal <- brewer.pal(9, "Set1")
+plot(x=1:length(wordcount2), y=as.vector(wordcount2)) #대략적 빈도의 분포
+pal <- brewer.pal(5, "Dark2")
+
+wordcloud(names(wordcount2), freq=wordcount2, scale=c(3, 1),
+          random.order = F, rot.per=.15, colors=pal)
+
+# 2.1.3.보통명사만 처리하기 #주제어들의 파악 가능!
+fulltext3 <- c(word.NC)
+wordcount3 <- table(fulltext3)
+meanless <- c(which(names(wordcount3)=="수업"), which(names(wordcount3)=="혜원"), which(names(wordcount3)=="안희주"),
+              which(names(wordcount3)=="김진석"), which(names(wordcount3)=="김도현"), which(names(wordcount3)=="장윤서"),
+              which(names(wordcount3)=="매원초"), which(names(wordcount3)=="강진현"), which(names(wordcount3)=="수업"))
+wordcount3 <- wordcount3[-meanless]
+
+plot(x=1:length(wordcount3), y=as.vector(wordcount3)) #대략적 빈도의 분포
+pal <- brewer.pal(5, "Dark2")
 
 png("wordcloud_all.png", width=3000, height=3000, res=350)
-wordcloud(names(wordcount), freq=wordcount*10000, scale=c(5, 0.5), max.words=200,
-          random.order = F, rot.per=.15, colors=pal, family="HG")
+wordcloud(names(wordcount3), freq=wordcount3, scale=c(5, 1), min.freq = 10,
+          random.order = F, rot.per=.15, colors=pal)
 dev.off()
-
-
-# 4. 잠재의미분석
-LSA <- lsa(td, dim=4)
-st <- LSA$tk; wd <- LSA$dk; strength <- LSA$sk
-st
-var(st)
