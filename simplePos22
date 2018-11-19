@@ -1,6 +1,6 @@
 # 1.2.SimplePos22으로 의미를 가지는 단어들 추출
 # "+"를 기준으로 분리시키기 -> 형태소 단위로 쪼갠다.
-#stringr로 /PV, /pA, /PX<-보조용언이라 안써도 될듯?, /MM, /MA 이게 들어가는 것만 뽑는다. -> 용언, 수식언
+#stringr로 /PV, /pA, /PX<-보조용언, /MM, /MA 이게 들어가는 것만 뽑는다. -> 용언, 수식언
 text_word <- sapply(text_list, KoNLP::SimplePos22)
 dat <- unlist(text_word)
 names(dat) <- NULL
