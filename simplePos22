@@ -1,0 +1,29 @@
+# 1.2.SimplePos22으로 의미를 가지는 단어들 추출
+# "+"를 기준으로 분리시키기 -> 형태소 단위로 쪼갠다.
+#stringr로 /PV, /pA, /PX<-보조용언이라 안써도 될듯?, /MM, /MA 이게 들어가는 것만 뽑는다. -> 용언, 수식언
+text_word <- sapply(text_list, KoNLP::SimplePos22)
+dat <- unlist(text_word)
+names(dat) <- NULL
+dat <- lapply(dat, function(x) strsplit(x, split="[:+]"))
+dat <- unlist(dat)
+dat <- strsplit(dat, " ")
+dat <- unlist(dat)
+
+word.PV <- grep("PV", dat, value=T)
+word.PA <- grep("PA", dat, value=T)
+word.PX <- grep("PX", dat, value=T)
+word.MM <- grep("MM", dat, value=T)
+word.MA <- grep("MA", dat, value=T)
+word.NC <- grep("NC", dat, value=T)
+
+# 용언들의 형태 "-다."로 통일하기.
+word.PV <- paste0(gsub("/PV", "", word.PV), "다")
+word.PV <- gsub("다다", "다", word.PV)
+word.PA <- paste0(gsub("/PA", "", word.PA), "다")
+word.PA <- gsub("다다", "다", word.PA)
+word.PX <- paste0(gsub("/PX", "", word.PX), "다")
+word.PX <- gsub("다다", "다", word.PX)
+word.MM <- gsub("/MM", "", word.MM)
+word.MA <- gsub("/MA", "", word.MA)
+word.NC <- gsub("/NC", "", word.NC)
+word.NC <- word.NC[-which(nchar(word.NC)<2)]
