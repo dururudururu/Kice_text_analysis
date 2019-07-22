@@ -1,0 +1,137 @@
+################## Library Settings ###########
+library(rJava)
+library(KoNLP)
+library(tm)
+library(ggplot2)
+library(wordcloud)
+library(stringr)
+library(extrafont)
+library(reshape2)
+library(lsa)
+library(topicmodels)
+library(igraph)
+library(RColorBrewer)
+library(dplyr)
+KoNLP::useNIADic()
+
+extrafont::loadfonts(device="win")
+windowsFonts(HG=windowsFont("SeoulHangang M"))
+windowsFonts(NS=windowsFont("SeoulNamsan M"))
+################################################
+
+
+## 0.File load
+setwd("C:/data/kice_text_analysis2/data")
+
+wordmat <- read.csv("11q_words.csv", row.names = "X")
+wordlist = wordmat$words
+typelist = wordmat$type
+typelist = as.character(typelist)
+
+wordmat_ag <- wordmat[,-c(1,13)]
+wordmat_ag <- aggregate(as.data.frame(wordmat_ag), list(wordlist), sum)
+
+typelist_ag = 1:799
+for (i in 1:799) {
+  index = which(wordmat$words == wordmat_ag$Group.1[i])
+  typelist_ag[i] = typelist[index[1]]
+  typelist_ag[i]
+}
+
+names(wordmat_ag)[1] = "words"
+wordmat_ag$type = typelist_ag
+
+tfidf = function(x) {
+  idf = log(11/sum(length(which(x!=0))))
+  val = x*idf
+  return(val)
+}
+
+wordmat_tfidf = t(apply(wordmat_ag[,-c(1,13)],1,tfidf))
+wordmat_tfidf = as.data.frame(wordmat_tfidf)
+wordmat_tfidf$words = wordmat_ag$words
+wordmat_tfidf$type = wordmat_ag$type
+
+wordmat_ag$words[which(wordmat_ag$type=="mm")]
+
+#head(wordmat_ag[which(wordmat_ag$type!="mm"),],20)
+#head(wordmat_tfidf[which(wordmat_tfidf$type!="mm"),],20)
+#write.csv(wordmat_tfidf[which(rowSums(wordmat_tfidf[,1:11])==0),], "tfidf0.csv")
+#write.csv(wordmat_ag[which(rowSums(wordmat_tfidf[,1:11])==0),], "tfidfraw.csv")
+
+for (i in 1:11) {
+  df = wordmat_tfidf[-which(wordmat_tfidf$type=="mm"),c(i,12,13)]
+  df_wc = reshape(df, timevar = "type", idvar = "words",
+                   direction = "wide")
+  df_wc[is.na(df_wc)]=0
+  row.names(df_wc) = df_wc$words
+  names(df_wc) = c("term", "명사", "관형사", "동사", "형용사")
+
+  ## wordcloud
+  setwd("C:/data/kice_text_analysis2/results/plots/wordcloud")
+  png(paste0("wc",i,"nc.png"), width =3000, height=3000, res=600)
+  wordcloud(words = row.names(df_wc), freq = df_wc[,2],
+            max.words = 40, min.freq = 0, scale = c(3, 0.5), rot.per = 0,
+            random.order = F, colors = "darkred", family = "HG")
+  dev.off()
+  
+  png(paste0("wc",i,"ma.png"), width =3000, height=3000, res=600)
+  wordcloud(words = row.names(df_wc), freq = df_wc[,3],
+            max.words = 40, min.freq = 0, scale = c(3, 0.5), rot.per = 0,
+            random.order = F, colors = "darkblue", family = "HG")
+  dev.off()
+  
+  png(paste0("wc",i,"pv.png"), width =3000, height=3000, res=600)
+  wordcloud(words = row.names(df_wc), freq = df_wc[,4],
+            max.words = 40, min.freq = 0, scale = c(3, 0.5), rot.per = 0,
+            random.order = F, colors = "darkgreen", family = "HG")
+  dev.off()
+  
+  png(paste0("wc",i,"pa.png"), width =3000, height=3000, res=600)
+  wordcloud(words = row.names(df_wc), freq = df_wc[,5],
+            max.words = 40, min.freq = 0, scale = c(3, 0.5), rot.per = 0,
+            random.order = F, colors = "blueviolet", family = "HG")
+  dev.off()
+  
+  
+  pal = brewer.pal(8,"Dark2")
+  png(paste0("wc",i,".png"), width =3000, height=3000, res=600)
+  wordcloud(words = df$words, freq = df[,1],
+            max.words = 80, min.freq = 0, scale = c(3, 0.5), rot.per = 0,
+            random.order = F, random.color = F, colors = pal, family = "HG")
+  dev.off()
+
+  
+  ##freq table
+  setwd("C:/data/kice_text_analysis2/results/tabs/wordcloudfreq")
+  freq1 = df_wc[,c(1,2)]
+  freq2 = df_wc[,c(1,3)]
+  freq3 = df_wc[,c(1,4)]
+  freq4 = df_wc[,c(1,5)]
+  
+  freq1 = arrange(freq1, desc(명사))[1:40,]
+  freq2 = arrange(freq2, desc(관형사))[1:40,]
+  freq3 = arrange(freq3, desc(동사))[1:40,]
+  freq4 = arrange(freq4, desc(형용사))[1:40,]
+  
+  freq1$명사 = round(freq1$명사, 2)
+  freq2$관형사 = round(freq2$관형사, 2)
+  freq3$동사 = round(freq3$동사, 2)
+  freq4$형용사 = round(freq4$형용사, 2)
+  
+  index = matrix(0, nrow=40, ncol=4)
+  for (j in 1:40) {
+    index[j,1] = which(freq1$term[j] == wordmat_ag$words)
+    index[j,2] = which(freq2$term[j] == wordmat_ag$words)
+    index[j,3] = which(freq3$term[j] == wordmat_ag$words)
+    index[j,4] = which(freq4$term[j] == wordmat_ag$words)
+  }
+  
+  #freq1 = cbind(freq1, wordmat_ag[index[,1],(i+1)])
+  #freq2 = cbind(freq2, wordmat_ag[index[,2],(i+1)])
+  #freq3 = cbind(freq3, wordmat_ag[index[,3],(i+1)])
+  #freq4 = cbind(freq4, wordmat_ag[index[,4],(i+1)])
+  
+  df_freq = cbind(freq1, freq2, freq3, freq4)
+  write.csv(df_freq, paste0("freqTOP40_Q",i,".csv"))
+}
